@@ -5,6 +5,9 @@ using System.Text;
 using ChatApp.Features.UserAuth.Models;
 using ChatApp.Features.UserAuth.Service.Implementation;
 using ChatApp.Features.UserAuth.Service.Interface;
+using ChatApp.Features.UserManagement.Service.Implementation;
+using ChatApp.Features.UserManagement.Service.Interface;
+using ChatApp.Mapping;
 using ChatApp.Repositories.Implementations;
 using ChatApp.Repositories.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -74,10 +77,13 @@ services.AddAuthentication(opts =>
     };
 });
 
+services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
+
 services.AddTransient<IUsersRepository, UsersRepository>();
 
 services.AddTransient<IPasswordHasher<User>, PasswordHasher<User>>();
 services.AddTransient<IAuthService, AuthService>();
+services.AddTransient<IUsersManagementService, UsersManagementService>();
 
 var app = builder.Build();
 

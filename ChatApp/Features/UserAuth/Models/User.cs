@@ -21,7 +21,7 @@ public class User
         HashedPassword = hashedPassword;
     }
 
-    public void Update(string username, string lastName, string email)
+    public void Update(string username, string email)
     {
         Username = username;
         Email = email;
