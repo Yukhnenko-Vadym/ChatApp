@@ -1,10 +1,52 @@
 using ChatApp.Data;
+using ChatApp.Exceptions;
 using Microsoft.EntityFrameworkCore;
+using System.Text;
+using ChatApp.Features.UserAuth.Models;
+using ChatApp.Features.UserAuth.Service.Implementation;
+using ChatApp.Features.UserAuth.Service.Interface;
+using ChatApp.Repositories.Implementations;
+using ChatApp.Repositories.Interfaces;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.OpenApi.Models;
+using Microsoft.IdentityModel.Tokens;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
+var services = builder.Services;
+var config = builder.Configuration;
+
+services.AddControllers(opts => opts.Filters.Add<ApiExceptionFilter>());  
+
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+
+builder.Services.AddSwaggerGen(opts =>
+{
+    opts.AddSecurityDefinition(JwtBearerDefaults.AuthenticationScheme, new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.Http,
+        Scheme = JwtBearerDefaults.AuthenticationScheme
+    });
+    
+    opts.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = JwtBearerDefaults.AuthenticationScheme
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
 
 builder.Services.AddDbContext<ChatContext>(options =>
 {
@@ -12,9 +54,33 @@ builder.Services.AddDbContext<ChatContext>(options =>
     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
 });
 
+services.AddAuthentication(opts =>
+{
+    opts.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    opts.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    opts.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+}).AddJwtBearer(opts =>
+{
+    opts.SaveToken = true;
+    opts.RequireHttpsMetadata = false;
+    opts.TokenValidationParameters = new TokenValidationParameters
+    {
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["JWT:Secret"]!)),
+        ValidateIssuer = true,
+        ValidIssuer = config["JWT:ValidIssuer"],
+        ValidateAudience = true,
+        ValidAudience = config["JWT:ValidAudience"],
+        ClockSkew = TimeSpan.Zero
+    };
+});
+
+services.AddTransient<IUsersRepository, UsersRepository>();
+
+services.AddTransient<IPasswordHasher<User>, PasswordHasher<User>>();
+services.AddTransient<IAuthService, AuthService>();
+
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -23,29 +89,11 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
+app.UseAuthentication();
 
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast")
-.WithOpenApi();
+app.UseAuthorization();
+
+app.MapControllers();
 
 app.Run();
 
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
